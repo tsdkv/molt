@@ -7,10 +7,15 @@ import (
 	"math"
 )
 
+// Relation judges two outputs — source output and follow-up output. A nil
+// error means the relation holds. Relations that need the inputs are built
+// with RelCase and receive the full Case instead.
+type Relation[O any] func(srcOut, fupOut O) error
+
 // Equal returns a Relation requiring both outputs to be ==.
-func Equal[I any, O comparable]() Relation[I, O] {
-	return func(c Case[I, O]) error {
-		if c.SourceOut != c.FollowUpOut {
+func Equal[O comparable]() Relation[O] {
+	return func(a, b O) error {
+		if a != b {
 			return fmt.Errorf("outputs are not equal")
 		}
 		return nil
@@ -19,9 +24,9 @@ func Equal[I any, O comparable]() Relation[I, O] {
 
 // EqualFunc returns a Relation requiring both outputs to be equal according
 // to eq (for example slices.Equal).
-func EqualFunc[I, O any](eq func(a, b O) bool) Relation[I, O] {
-	return func(c Case[I, O]) error {
-		if !eq(c.SourceOut, c.FollowUpOut) {
+func EqualFunc[O any](eq func(a, b O) bool) Relation[O] {
+	return func(a, b O) error {
+		if !eq(a, b) {
 			return fmt.Errorf("outputs are not equal")
 		}
 		return nil
@@ -30,11 +35,73 @@ func EqualFunc[I, O any](eq func(a, b O) bool) Relation[I, O] {
 
 // ApproxEqual returns a Relation requiring both outputs to be within tol of
 // each other.
-func ApproxEqual[I any](tol float64) Relation[I, float64] {
-	return func(c Case[I, float64]) error {
-		if math.Abs(c.SourceOut-c.FollowUpOut) > tol {
-			return fmt.Errorf("|%v - %v| = %v exceeds tolerance %v",
-				c.SourceOut, c.FollowUpOut, math.Abs(c.SourceOut-c.FollowUpOut), tol)
+func ApproxEqual(tol float64) Relation[float64] {
+	return func(a, b float64) error {
+		if math.Abs(a-b) > tol {
+			return fmt.Errorf("|%v - %v| = %v exceeds tolerance %v", a, b, math.Abs(a-b), tol)
+		}
+		return nil
+	}
+}
+
+// AtLeast returns a Relation requiring the follow-up output to be greater
+// than or equal to the source output: more (or bigger) input must not
+// shrink the output.
+func AtLeast[O cmp.Ordered]() Relation[O] {
+	return func(a, b O) error {
+		if b < a {
+			return fmt.Errorf("follow-up output %v < source output %v", b, a)
+		}
+		return nil
+	}
+}
+
+// AtMost returns a Relation requiring the follow-up output to be less than
+// or equal to the source output.
+func AtMost[O cmp.Ordered]() Relation[O] {
+	return func(a, b O) error {
+		if b > a {
+			return fmt.Errorf("follow-up output %v > source output %v", b, a)
+		}
+		return nil
+	}
+}
+
+// PermutationOf returns a Relation requiring both outputs to contain the
+// same elements with the same multiplicities, in any order.
+func PermutationOf[E comparable]() Relation[[]E] {
+	return func(a, b []E) error {
+		if len(a) != len(b) {
+			return fmt.Errorf("outputs are not permutations of each other")
+		}
+		counts := make(map[E]int, len(a))
+		for _, e := range a {
+			counts[e]++
+		}
+		for _, e := range b {
+			counts[e]--
+			if counts[e] < 0 {
+				return fmt.Errorf("outputs are not permutations of each other")
+			}
+		}
+		return nil
+	}
+}
+
+// SetEqual returns a Relation requiring both outputs to contain the same
+// set of elements, ignoring order and duplicates.
+func SetEqual[E comparable]() Relation[[]E] {
+	return func(a, b []E) error {
+		as := make(map[E]bool, len(a))
+		for _, e := range a {
+			as[e] = true
+		}
+		bs := make(map[E]bool, len(b))
+		for _, e := range b {
+			bs[e] = true
+		}
+		if !maps.Equal(as, bs) {
+			return fmt.Errorf("outputs do not contain the same set of elements")
 		}
 		return nil
 	}
@@ -42,10 +109,10 @@ func ApproxEqual[I any](tol float64) Relation[I, float64] {
 
 // All returns a Relation that holds when every given relation holds. The
 // first violation found is reported.
-func All[I, O any](rels ...Relation[I, O]) Relation[I, O] {
-	return func(c Case[I, O]) error {
+func All[O any](rels ...Relation[O]) Relation[O] {
+	return func(a, b O) error {
 		for _, rel := range rels {
-			if err := rel(c); err != nil {
+			if err := rel(a, b); err != nil {
 				return err
 			}
 		}
@@ -53,13 +120,13 @@ func All[I, O any](rels ...Relation[I, O]) Relation[I, O] {
 	}
 }
 
-// Any returns a Relation that holds when at least one given relation holds —
-// a weaker oracle for cases where several outcomes are acceptable.
-func Any[I, O any](rels ...Relation[I, O]) Relation[I, O] {
-	return func(c Case[I, O]) error {
+// Any returns a Relation that holds when at least one given relation
+// holds — a weaker oracle for cases where several outcomes are acceptable.
+func Any[O any](rels ...Relation[O]) Relation[O] {
+	return func(a, b O) error {
 		var errs []error
 		for _, rel := range rels {
-			if err := rel(c); err != nil {
+			if err := rel(a, b); err != nil {
 				errs = append(errs, err)
 			} else {
 				return nil
@@ -69,87 +136,12 @@ func Any[I, O any](rels ...Relation[I, O]) Relation[I, O] {
 	}
 }
 
-// Contra returns a Relation that judges a projection of the outputs: proj is
-// applied to both outputs before rel judges them. Most real relations are a
-// projection plus a simple check — "same length", "same set of elements",
-// "same maximum".
-func Contra[I, O, P any](proj func(O) P, rel Relation[I, P]) Relation[I, O] {
-	return func(c Case[I, O]) error {
-		return rel(Case[I, P]{
-			Source:      c.Source,
-			FollowUp:    c.FollowUp,
-			SourceOut:   proj(c.SourceOut),
-			FollowUpOut: proj(c.FollowUpOut),
-		})
+// Contra returns a Relation that judges a projection of the outputs: proj
+// is applied to both outputs before rel judges them. Most real relations
+// are a projection plus a simple check — "same length", "same set of
+// elements", "same maximum".
+func Contra[O, P any](proj func(O) P, rel Relation[P]) Relation[O] {
+	return func(a, b O) error {
+		return rel(proj(a), proj(b))
 	}
-}
-
-// PermutationOf returns a Relation requiring both outputs to contain the
-// same elements with the same multiplicities, in any order.
-func PermutationOf[I any, E comparable]() Relation[I, []E] {
-	return func(c Case[I, []E]) error {
-		if !sameMultiset(c.SourceOut, c.FollowUpOut) {
-			return fmt.Errorf("outputs are not permutations of each other")
-		}
-		return nil
-	}
-}
-
-// SetEqual returns a Relation requiring both outputs to contain the same set
-// of elements, ignoring order and duplicates.
-func SetEqual[I any, E comparable]() Relation[I, []E] {
-	return func(c Case[I, []E]) error {
-		src := make(map[E]bool, len(c.SourceOut))
-		for _, e := range c.SourceOut {
-			src[e] = true
-		}
-		fup := make(map[E]bool, len(c.FollowUpOut))
-		for _, e := range c.FollowUpOut {
-			fup[e] = true
-		}
-		if !maps.Equal(src, fup) {
-			return fmt.Errorf("outputs do not contain the same set of elements")
-		}
-		return nil
-	}
-}
-
-// AtLeast returns a Relation requiring the follow-up output to be greater
-// than or equal to the source output: more (or bigger) input must not shrink
-// the output.
-func AtLeast[I any, O cmp.Ordered]() Relation[I, O] {
-	return func(c Case[I, O]) error {
-		if c.FollowUpOut < c.SourceOut {
-			return fmt.Errorf("follow-up output %v < source output %v", c.FollowUpOut, c.SourceOut)
-		}
-		return nil
-	}
-}
-
-// AtMost returns a Relation requiring the follow-up output to be less than
-// or equal to the source output.
-func AtMost[I any, O cmp.Ordered]() Relation[I, O] {
-	return func(c Case[I, O]) error {
-		if c.FollowUpOut > c.SourceOut {
-			return fmt.Errorf("follow-up output %v > source output %v", c.FollowUpOut, c.SourceOut)
-		}
-		return nil
-	}
-}
-
-func sameMultiset[E comparable](a, b []E) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	counts := make(map[E]int, len(a))
-	for _, e := range a {
-		counts[e]++
-	}
-	for _, e := range b {
-		counts[e]--
-		if counts[e] < 0 {
-			return false
-		}
-	}
-	return true
 }

@@ -18,8 +18,8 @@ type Impl[S any] struct {
 //
 // Prepare draws the operation's arguments from t exactly once and returns a
 // closure applying the operation to a single system, returning an observable
-// result that is compared across implementations (with reflect.DeepEqual).
-// Return nil for operations with no observable output.
+// result that is compared across implementations. Return nil for operations
+// with no observable output.
 type Op[S any] struct {
 	Name    string
 	Weight  int
@@ -28,13 +28,17 @@ type Op[S any] struct {
 
 // Diff runs a random sequence of operations against every implementation in
 // lockstep and fails at the first step where their observable results
-// diverge. At least two implementations are required, and every Op must have
-// a positive weight.
+// diverge. At least two implementations are required, and every Op must
+// have a positive weight. Results are compared with equal; pass nil to use
+// reflect.DeepEqual.
 //
 // The whole sequence — its length, the choice of operations and their
-// arguments — is drawn through rapid, so divergences are reproducible from a
-// seed and minimized automatically.
-func Diff[S any](t *rapid.T, impls []Impl[S], ops []Op[S], steps *rapid.Generator[int]) {
+// arguments — is drawn through rapid, so divergences are reproducible from
+// a seed and minimized automatically.
+func Diff[S any](t *rapid.T, impls []Impl[S], ops []Op[S], steps *rapid.Generator[int], equal func(a, b any) bool) {
+	if equal == nil {
+		equal = func(a, b any) bool { return reflect.DeepEqual(a, b) }
+	}
 	if len(impls) < 2 {
 		t.Fatalf("molt.Diff: need at least 2 implementations, got %d", len(impls))
 	}
@@ -60,7 +64,7 @@ func Diff[S any](t *rapid.T, impls []Impl[S], ops []Op[S], steps *rapid.Generato
 			results[j] = apply(s)
 		}
 		for j := 1; j < len(results); j++ {
-			if !reflect.DeepEqual(results[0], results[j]) {
+			if !equal(results[0], results[j]) {
 				t.Fatalf("step %d: op %q diverged:\n"+
 					"%s: %#v\n"+
 					"%s: %#v",
