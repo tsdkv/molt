@@ -100,9 +100,10 @@ The whole library is layers, each callable without the ones above:
 ```
 ┌──────────────────────────────────────────────────┐
 │  laws — ready-made relation sets                 │
-│  Codec · Sortable · Comparator                   │
+│  Codec · Sortable · Comparator · Set             │
 ├──────────────────────────────────────────────────┤
 │  runners      Run · RunN · Diff                  │
+│               RunExamples · RunExamplesN         │
 ├──────────────────────────────────────────────────┤
 │  combinators  All · Any · Contra                 │
 │               Identity · Compose · PowerSet      │
@@ -198,15 +199,30 @@ laws.Sortable(t, rapid.SliceOf(rapid.Int()), mysort)
 
 // your comparator must be reflexive, antisymmetric, eq-consistent, transitive
 laws.Comparator(t, rapid.Int(), myCmp, func(a, b int) bool { return a == b })
+
+// your set: construction order/dedup invariance + union/intersection algebra
+laws.Set(t, rapid.IntRange(0, 100), newMySet, mySetElements, myUnion, myInter)
 ```
 
 Every law set is verified in molt's own test suite to catch deliberately broken implementations.
 
 N-ary relations (`RunN`, `MRN`) power the multi-input laws like commutativity and transitivity — relations over 2–3 independent inputs that a single-source MR cannot express.
 
+## Fixed inputs: `RunExamples`
+
+The same relations can run over a fixed list of inputs instead of generated ones — regression corpora harvested from rapid failures, inputs too structured to generate, known-nasty cases. This needs no rapid at all, just `testing.T`:
+
+```go
+func TestSortRegression(t *testing.T) {
+	molt.RunExamples(t, [][]int{{}, {1}, {math.MaxInt, 0}}, mysort, mySortMRs...)
+}
+```
+
+(One caveat: transforms in examples mode receive a nil `*rapid.T`, so they must not draw.)
+
 ## Status
 
-Early; API may still shift. Done: the core vocabulary (`Case`, `MR`, `Relation`, and n-ary `CaseN`/`MRN`), runners (`Run`, `RunN`, `Diff`), primitives (`Follow`, `Execute`, `Assert` and n-ary variants), relation and transform combinators, and the first law sets (`laws.Codec`, `laws.Sortable`, `laws.Comparator`). Planned: an example-driven mode (run relations over fixed input tables), and more law sets.
+Early; API may still shift. Done: the core vocabulary (`Case`, `MR`, `Relation`, and n-ary `CaseN`/`MRN`), runners (`Run`, `RunN`, `Diff`) and fixed-input modes (`RunExamples`, `RunExamplesN`), primitives (`Follow`, `Execute`, `Assert` and n-ary variants), relation and transform combinators, and law sets for codecs, sort functions, comparators, and sets. Planned: more law sets, runnable doc examples.
 
 ## License
 
