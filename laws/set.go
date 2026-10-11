@@ -4,27 +4,30 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/xf"
 	"pgregory.net/rapid"
 )
 
 // Set checks the laws of a set implementation. newSet builds a set from a
 // list of elements; elements must return the set's contents in any order.
-// union and inter may be nil, in which case the algebra laws are skipped and
-// only the construction laws are checked.
+// union and inter may be nil, in which case the algebra laws are skipped
+// and only the construction laws are checked.
 //
-// Construction laws: building a set is order- and duplication-invariant, and
-// the result contains exactly the input elements. Algebra laws: union and
-// intersection are commutative and idempotent, intersection is a subset of
-// both operands, union a superset.
+// Construction laws: building a set is order- and duplication-invariant,
+// and the result contains exactly the input elements. Algebra laws: union
+// and intersection are commutative and idempotent, intersection is a subset
+// of both operands, union a superset.
 func Set[S any, E cmp.Ordered](
-	t *rapid.T,
+	t *testing.T,
 	elemGen *rapid.Generator[E],
 	newSet func([]E) S,
 	elements func(S) []E,
 	union, inter func(a, b S) S,
 ) {
+	t.Helper()
 	canonSet := func(s S) []E {
 		out := slices.Clone(elements(s))
 		slices.Sort(out)
@@ -35,114 +38,83 @@ func Set[S any, E cmp.Ordered](
 	}
 
 	listGen := rapid.SliceOf(elemGen)
-	molt.Run(t, listGen, canonList,
-		molt.MR[[]E, []E]{
-			Name: "construction-order-invariant",
-			Transform: func(_ *rapid.T, in []E) []E {
-				out := slices.Clone(in)
-				slices.Reverse(out)
-				return out
-			},
-			Check: molt.EqualFunc[[]E, []E](slices.Equal),
+	molt.Test(t, listGen, canonList, constructionMRs[E]()...)
+
+	if union == nil || inter == nil {
+		return
+	}
+
+	molt.Test(t, rapid.SliceOfN(listGen, 2, 2),
+		func(srcs [][]E) setPair[E] {
+			a, b := newSet(srcs[0]), newSet(srcs[1])
+			return setPair[E]{canonSet(union(a, b)), canonSet(inter(a, b))}
 		},
-		molt.MR[[]E, []E]{
-			Name: "construction-dedup-invariant",
-			Transform: func(_ *rapid.T, in []E) []E {
-				return append(slices.Clone(in), in...)
-			},
-			Check: molt.EqualFunc[[]E, []E](slices.Equal),
-		},
-		molt.MR[[]E, []E]{
-			Name:      "construction-contains-all-inputs",
-			Transform: molt.Identity[[]E],
-			Check: func(c molt.Case[[]E, []E]) error {
+		algebraMRs(union, inter, canonList)...)
+}
+
+// setPair is the observable output of the set-algebra SUT: the canonical
+// element lists of union(a, b) and intersection(a, b).
+type setPair[E cmp.Ordered] struct {
+	union []E
+	inter []E
+}
+
+func constructionMRs[E cmp.Ordered]() []molt.MR[[]E, []E] {
+	return []molt.MR[[]E, []E]{
+		molt.Rel("construction-order-invariant", xf.Reverse[E](), molt.EqualFunc[[]E](slices.Equal)),
+		molt.Rel("construction-dedup-invariant", xf.Duplicate[E](), molt.EqualFunc[[]E](slices.Equal)),
+		molt.RelCase("construction-contains-all-inputs", molt.Identity[[]E](),
+			func(c molt.Case[[]E, []E]) error {
 				for _, e := range c.Source {
 					if !slices.Contains(c.SourceOut, e) {
 						return fmt.Errorf("set built from input does not contain %v", e)
 					}
 				}
 				return nil
-			},
-		},
-		molt.MR[[]E, []E]{
-			Name:      "construction-contains-nothing-else",
-			Transform: molt.Identity[[]E],
-			Check: func(c molt.Case[[]E, []E]) error {
+			}),
+		molt.RelCase("construction-contains-nothing-else", molt.Identity[[]E](),
+			func(c molt.Case[[]E, []E]) error {
 				for _, e := range c.SourceOut {
 					if !slices.Contains(c.Source, e) {
 						return fmt.Errorf("set contains %v, which was never added", e)
 					}
 				}
 				return nil
-			},
-		},
-	)
-
-	if union == nil || inter == nil {
-		return
+			}),
 	}
+}
 
-	type pair struct {
-		union []E
-		inter []E
-	}
-	f2 := func(srcs [][]E) pair {
-		a, b := newSet(srcs[0]), newSet(srcs[1])
-		return pair{canonSet(union(a, b)), canonSet(inter(a, b))}
-	}
-	keep := func(_ *rapid.T, srcs [][]E) [][]E { return srcs }
-	swap := func(_ *rapid.T, srcs [][]E) [][]E { return [][]E{srcs[1], srcs[0]} }
-
-	molt.RunN(t, listGen, 2, f2,
-		molt.MRN[[]E, pair]{
-			Name:      "union-commutative",
-			Transform: swap,
-			Check: func(c molt.CaseN[[]E, pair]) error {
-				if !slices.Equal(c.SourceOut.union, c.FollowUpOut.union) {
-					return fmt.Errorf("union(a, b) != union(b, a)")
-				}
-				return nil
-			},
-		},
-		molt.MRN[[]E, pair]{
-			Name:      "intersection-commutative",
-			Transform: swap,
-			Check: func(c molt.CaseN[[]E, pair]) error {
-				if !slices.Equal(c.SourceOut.inter, c.FollowUpOut.inter) {
-					return fmt.Errorf("inter(a, b) != inter(b, a)")
-				}
-				return nil
-			},
-		},
-		molt.MRN[[]E, pair]{
-			Name: "union-idempotent",
-			Transform: func(_ *rapid.T, srcs [][]E) [][]E {
-				return [][]E{srcs[0], srcs[0]}
-			},
-			Check: func(c molt.CaseN[[]E, pair]) error {
-				if want := canonList(c.Sources[0]); !slices.Equal(c.FollowUpOut.union, want) {
+func algebraMRs[S any, E cmp.Ordered](
+	union, inter func(a, b S) S,
+	canonList func([]E) []E,
+) []molt.MR[[][]E, setPair[E]] {
+	swap := molt.Pure(func(srcs [][]E) [][]E { return [][]E{srcs[1], srcs[0]} })
+	keep := molt.Identity[[][]E]()
+	return []molt.MR[[][]E, setPair[E]]{
+		molt.Rel("union-commutative", swap,
+			molt.Contra(func(p setPair[E]) []E { return p.union }, molt.EqualFunc[[]E](slices.Equal))),
+		molt.Rel("intersection-commutative", swap,
+			molt.Contra(func(p setPair[E]) []E { return p.inter }, molt.EqualFunc[[]E](slices.Equal))),
+		molt.RelCase("union-idempotent",
+			molt.Pure(func(srcs [][]E) [][]E { return [][]E{srcs[0], srcs[0]} }),
+			func(c molt.Case[[][]E, setPair[E]]) error {
+				if want := canonList(c.Source[0]); !slices.Equal(c.FollowUpOut.union, want) {
 					return fmt.Errorf("union(a, a) = %v, want %v", c.FollowUpOut.union, want)
 				}
 				return nil
-			},
-		},
-		molt.MRN[[]E, pair]{
-			Name:      "intersection-subset",
-			Transform: keep,
-			Check: func(c molt.CaseN[[]E, pair]) error {
+			}),
+		molt.RelCase("intersection-subset", keep,
+			func(c molt.Case[[][]E, setPair[E]]) error {
 				for _, e := range c.SourceOut.inter {
-					if !slices.Contains(c.Sources[0], e) || !slices.Contains(c.Sources[1], e) {
+					if !slices.Contains(c.Source[0], e) || !slices.Contains(c.Source[1], e) {
 						return fmt.Errorf("intersection contains %v, absent from an operand", e)
 					}
 				}
 				return nil
-			},
-		},
-		molt.MRN[[]E, pair]{
-			Name:      "union-superset",
-			Transform: keep,
-			Check: func(c molt.CaseN[[]E, pair]) error {
-				for _, src := range c.Sources {
+			}),
+		molt.RelCase("union-superset", keep,
+			func(c molt.Case[[][]E, setPair[E]]) error {
+				for _, src := range c.Source {
 					for _, e := range src {
 						if !slices.Contains(c.SourceOut.union, e) {
 							return fmt.Errorf("union misses %v from an operand", e)
@@ -150,7 +122,6 @@ func Set[S any, E cmp.Ordered](
 					}
 				}
 				return nil
-			},
-		},
-	)
+			}),
+	}
 }

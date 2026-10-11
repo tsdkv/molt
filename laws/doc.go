@@ -1,10 +1,9 @@
-// Package laws provides ready-made metamorphic relation sets for contracts
-// that Go code re-implements all the time: codecs, comparators, sort
-// functions, key-value stores.
+// Package laws ships ready-made batteries of metamorphic relations for
+// contracts Go code re-implements all the time: codecs, sort functions,
+// comparators, sets. Each entry point is one line in a test and needs no
+// rapid knowledge:
 //
-// Each function runs a battery of relations against the provided
-// implementation via molt: every law is checked on generated inputs, and
-// violations are minimized by rapid. A law set is only shipped once it has
-// been shown to catch deliberately broken implementations — see the package
-// tests.
+//	func TestMySort(t *testing.T) {
+//		laws.Sortable(t, rapid.SliceOf(rapid.Int()), mysort)
+//	}
 package laws
