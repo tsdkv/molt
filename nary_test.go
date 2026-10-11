@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/internal/testutil"
 	"pgregory.net/rapid"
 )
 
@@ -41,7 +42,7 @@ func TestRunNCommutativityMutationCaught(t *testing.T) {
 				molt.Case[int, int]{SourceOut: c.SourceOut, FollowUpOut: c.FollowUpOut})
 		},
 	}
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		molt.RunN(t, rapid.Int(), 2, first, commutative)
 	})

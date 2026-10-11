@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/internal/testutil"
 	"pgregory.net/rapid"
 )
 
@@ -111,7 +112,7 @@ func TestKVDifferential(t *testing.T) {
 
 // A store whose Del is a no-op must diverge from the correct model.
 func TestKVMutationCaught(t *testing.T) {
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		molt.Diff(t,
 			[]molt.Impl[kvStore]{

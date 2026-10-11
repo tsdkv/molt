@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"testing"
 
+	"github.com/tsdkv/molt/internal/testutil"
 	"github.com/tsdkv/molt/laws"
 	"pgregory.net/rapid"
 )
@@ -18,7 +19,7 @@ func TestComparator(t *testing.T) {
 // antisymmetry and must be caught.
 func TestComparatorMutationCaught(t *testing.T) {
 	broken := func(a, b int) int { return -1 }
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		laws.Comparator(t, rapid.Int(), broken, func(a, b int) bool { return a == b })
 	})

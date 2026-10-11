@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/tsdkv/molt/internal/testutil"
 	"github.com/tsdkv/molt/laws"
 	"pgregory.net/rapid"
 )
@@ -30,7 +31,7 @@ func TestSortableMutationCaught(t *testing.T) {
 		}
 		return out
 	}
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		laws.Sortable(t, rapid.SliceOf(rapid.Int()), buggy)
 	})

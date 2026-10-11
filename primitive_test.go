@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/internal/testutil"
 	"pgregory.net/rapid"
 )
 
@@ -29,7 +30,7 @@ func TestPrimitivesMutationCaught(t *testing.T) {
 		}
 		return sortInts(in)
 	}
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		src, fup := molt.Follow(t, rapid.SliceOf(rapid.Int()), func(_ *rapid.T, in []int) []int {
 			out := slices.Clone(in)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/internal/testutil"
 	"pgregory.net/rapid"
 )
 
@@ -75,14 +76,14 @@ func TestSortMutationCaught(t *testing.T) {
 		}
 		return out
 	}
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		molt.Run(t, rapid.SliceOf(rapid.Int()), buggy, sortMRs...)
 	})
 	if !tb.Failed() {
 		t.Fatal("buggy sort was not caught")
 	}
-	if !strings.Contains(tb.log.String(), "metamorphic relation") {
-		t.Fatalf("failure message does not mention the relation:\n%s", tb.log.String())
+	if !strings.Contains(tb.Output(), "metamorphic relation") {
+		t.Fatalf("failure message does not mention the relation:\n%s", tb.Output())
 	}
 }

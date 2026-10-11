@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/tsdkv/molt/internal/testutil"
 	"github.com/tsdkv/molt/laws"
 	"pgregory.net/rapid"
 )
@@ -43,7 +44,7 @@ func TestCodecMutationCaught(t *testing.T) {
 		d.N++
 		return d, err
 	}
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		laws.Codec(t, docGen(), marshalDoc, broken, func(a, b doc) bool { return a == b })
 	})

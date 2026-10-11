@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tsdkv/molt"
+	"github.com/tsdkv/molt/internal/testutil"
 	"pgregory.net/rapid"
 )
 
@@ -52,7 +53,7 @@ func TestPowerSetSinMutationCaught(t *testing.T) {
 	}
 	mrs := molt.PowerSet("sin", molt.ApproxEqual[float64](1e-9), shift2Pi, mirrorPi)
 
-	tb := &fakeTB{}
+	tb := &testutil.TB{}
 	rapid.Check(tb, func(t *rapid.T) {
 		molt.Run(t, rapid.Float64Range(-5, 5), buggySin, mrs...)
 	})
