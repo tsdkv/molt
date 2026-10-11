@@ -27,7 +27,7 @@ func Execute[I, O any](f func(I) O, src, fup I) Case[I, O] {
 
 // Assert judges a Case with rel and fails the test — reporting the relation
 // name and all four artifacts — if the relation does not hold.
-func Assert[I, O any](t *rapid.T, name string, c Case[I, O], rel Relation[I, O]) {
+func Assert[I, O any](t Failer, name string, c Case[I, O], rel Relation[I, O]) {
 	if err := rel(c); err != nil {
 		t.Fatalf("metamorphic relation %q violated: %v\n"+
 			"source:         %#v\n"+

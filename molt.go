@@ -20,6 +20,12 @@ package molt
 
 import "pgregory.net/rapid"
 
+// Failer reports test failures. *testing.T and *rapid.T both satisfy it;
+// pass a plain *testing.T to use molt outside of rapid (see RunExamples).
+type Failer interface {
+	Fatalf(format string, args ...any)
+}
+
 // Case is one full execution of a metamorphic relation: the source input,
 // the follow-up input derived from it, and the outputs observed for both.
 type Case[I, O any] struct {

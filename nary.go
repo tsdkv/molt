@@ -55,7 +55,7 @@ func ExecuteN[I, O any](f func([]I) O, srcs, fups []I) CaseN[I, O] {
 
 // AssertN judges a CaseN with rel and fails the test — reporting the
 // relation name and all artifacts — if the relation does not hold.
-func AssertN[I, O any](t *rapid.T, name string, c CaseN[I, O], rel RelationN[I, O]) {
+func AssertN[I, O any](t Failer, name string, c CaseN[I, O], rel RelationN[I, O]) {
 	if err := rel(c); err != nil {
 		t.Fatalf("metamorphic relation %q violated: %v\n"+
 			"sources:        %#v\n"+
