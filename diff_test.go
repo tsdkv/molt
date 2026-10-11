@@ -106,6 +106,7 @@ func TestKVDifferential(t *testing.T) {
 			},
 			kvOps[kvStore](),
 			rapid.IntRange(1, 100),
+			nil,
 		)
 	})
 }
@@ -121,6 +122,7 @@ func TestKVMutationCaught(t *testing.T) {
 			},
 			kvOps[kvStore](),
 			rapid.IntRange(1, 100),
+			nil,
 		)
 	})
 	if !tb.Failed() {

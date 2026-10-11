@@ -7,50 +7,66 @@ import (
 	"github.com/tsdkv/molt"
 )
 
-func TestRelationCombinators(t *testing.T) {
-	c := molt.Case[int, []int]{Source: 1, FollowUp: 2, SourceOut: []int{1, 2, 3}, FollowUpOut: []int{3, 2, 1}}
-
-	lengths := molt.Contra(func(out []int) int { return len(out) }, molt.Equal[int, int]())
-	if err := lengths(c); err != nil {
-		t.Fatalf("Contra(len, Equal) should hold: %v", err)
+func TestRelationPack(t *testing.T) {
+	eq := molt.Equal[int]()
+	if err := eq(1, 1); err != nil {
+		t.Fatal(err)
 	}
-
-	passing := molt.Equal[int, int]()
-	failing := func(molt.Case[int, int]) error { return errors.New("nope") }
-
-	if err := molt.All(passing, failing)(molt.Case[int, int]{}); err == nil {
-		t.Fatal("All should fail when any relation fails")
+	if err := eq(1, 2); err == nil {
+		t.Fatal("Equal accepted different values")
 	}
-	if err := molt.Any(failing, passing)(molt.Case[int, int]{}); err != nil {
-		t.Fatalf("Any should hold when one relation holds: %v", err)
+	approx := molt.ApproxEqual(0.5)
+	if err := approx(1.0, 1.4); err != nil {
+		t.Fatal(err)
 	}
-	if err := molt.Any(failing, failing)(molt.Case[int, int]{}); err == nil {
-		t.Fatal("Any should fail when every relation fails")
+	if err := approx(1.0, 2.0); err == nil {
+		t.Fatal("ApproxEqual accepted values beyond tolerance")
+	}
+	if err := molt.AtLeast[int]()(1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := molt.AtLeast[int]()(2, 1); err == nil {
+		t.Fatal("AtLeast accepted a smaller follow-up")
+	}
+	if err := molt.AtMost[int]()(1, 2); err == nil {
+		t.Fatal("AtMost accepted a larger follow-up")
+	}
+	if err := molt.PermutationOf[int]()([]int{1, 2, 2}, []int{2, 1, 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := molt.PermutationOf[int]()([]int{1, 2, 2}, []int{1, 1, 2}); err == nil {
+		t.Fatal("PermutationOf accepted different multiplicities")
+	}
+	if err := molt.SetEqual[int]()([]int{1, 2, 2}, []int{2, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := molt.SetEqual[int]()([]int{1, 2}, []int{1, 3}); err == nil {
+		t.Fatal("SetEqual accepted different sets")
 	}
 }
 
-func TestRelationPack(t *testing.T) {
-	c := molt.Case[int, []int]{SourceOut: []int{3, 1, 2}, FollowUpOut: []int{2, 3, 1}}
-	if err := molt.PermutationOf[int, int]()(c); err != nil {
-		t.Fatalf("PermutationOf should hold: %v", err)
+func TestRelationCombinators(t *testing.T) {
+	ok := func(a, b int) error { return nil }
+	bad := func(a, b int) error { return errors.New("nope") }
+
+	if err := molt.All(ok, ok)(1, 2); err != nil {
+		t.Fatal(err)
 	}
-	dup := molt.Case[int, []int]{SourceOut: []int{1, 1, 2}, FollowUpOut: []int{1, 2, 2}}
-	if err := molt.PermutationOf[int, int]()(dup); err == nil {
-		t.Fatal("PermutationOf should fail when multiplicities differ")
+	if err := molt.All(ok, bad)(1, 2); err == nil {
+		t.Fatal("All passed with a failing relation")
 	}
-	if err := molt.SetEqual[int, int]()(dup); err != nil {
-		t.Fatalf("SetEqual should ignore multiplicities: %v", err)
+	if err := molt.Any(ok, bad)(1, 2); err != nil {
+		t.Fatal(err)
 	}
-	shuffled := molt.Case[int, []int]{SourceOut: []int{1, 2}, FollowUpOut: []int{2, 1}}
-	if err := molt.SetEqual[int, int]()(shuffled); err != nil {
-		t.Fatalf("SetEqual should ignore order: %v", err)
+	if err := molt.Any(bad, bad)(1, 2); err == nil {
+		t.Fatal("Any passed with all relations failing")
 	}
 
-	up := molt.Case[int, int]{SourceOut: 3, FollowUpOut: 5}
-	if err := molt.AtLeast[int, int]()(up); err != nil {
-		t.Fatalf("AtLeast should hold: %v", err)
+	double := molt.Contra(func(x int) int { return x * 2 }, molt.Equal[int]())
+	if err := double(3, 3); err != nil {
+		t.Fatal(err)
 	}
-	if err := molt.AtMost[int, int]()(up); err == nil {
-		t.Fatal("AtMost should fail")
+	if err := double(3, 4); err == nil {
+		t.Fatal("Contra passed on different projections")
 	}
 }
