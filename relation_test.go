@@ -28,3 +28,29 @@ func TestRelationCombinators(t *testing.T) {
 		t.Fatal("Any should fail when every relation fails")
 	}
 }
+
+func TestRelationPack(t *testing.T) {
+	c := molt.Case[int, []int]{SourceOut: []int{3, 1, 2}, FollowUpOut: []int{2, 3, 1}}
+	if err := molt.PermutationOf[int, int]()(c); err != nil {
+		t.Fatalf("PermutationOf should hold: %v", err)
+	}
+	dup := molt.Case[int, []int]{SourceOut: []int{1, 1, 2}, FollowUpOut: []int{1, 2, 2}}
+	if err := molt.PermutationOf[int, int]()(dup); err == nil {
+		t.Fatal("PermutationOf should fail when multiplicities differ")
+	}
+	if err := molt.SetEqual[int, int]()(dup); err != nil {
+		t.Fatalf("SetEqual should ignore multiplicities: %v", err)
+	}
+	shuffled := molt.Case[int, []int]{SourceOut: []int{1, 2}, FollowUpOut: []int{2, 1}}
+	if err := molt.SetEqual[int, int]()(shuffled); err != nil {
+		t.Fatalf("SetEqual should ignore order: %v", err)
+	}
+
+	up := molt.Case[int, int]{SourceOut: 3, FollowUpOut: 5}
+	if err := molt.AtLeast[int, int]()(up); err != nil {
+		t.Fatalf("AtLeast should hold: %v", err)
+	}
+	if err := molt.AtMost[int, int]()(up); err == nil {
+		t.Fatal("AtMost should fail")
+	}
+}

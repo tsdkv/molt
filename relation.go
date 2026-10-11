@@ -1,7 +1,9 @@
 package molt
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"math"
 )
 
@@ -80,4 +82,74 @@ func Contra[I, O, P any](proj func(O) P, rel Relation[I, P]) Relation[I, O] {
 			FollowUpOut: proj(c.FollowUpOut),
 		})
 	}
+}
+
+// PermutationOf returns a Relation requiring both outputs to contain the
+// same elements with the same multiplicities, in any order.
+func PermutationOf[I any, E comparable]() Relation[I, []E] {
+	return func(c Case[I, []E]) error {
+		if !sameMultiset(c.SourceOut, c.FollowUpOut) {
+			return fmt.Errorf("outputs are not permutations of each other")
+		}
+		return nil
+	}
+}
+
+// SetEqual returns a Relation requiring both outputs to contain the same set
+// of elements, ignoring order and duplicates.
+func SetEqual[I any, E comparable]() Relation[I, []E] {
+	return func(c Case[I, []E]) error {
+		src := make(map[E]bool, len(c.SourceOut))
+		for _, e := range c.SourceOut {
+			src[e] = true
+		}
+		fup := make(map[E]bool, len(c.FollowUpOut))
+		for _, e := range c.FollowUpOut {
+			fup[e] = true
+		}
+		if !maps.Equal(src, fup) {
+			return fmt.Errorf("outputs do not contain the same set of elements")
+		}
+		return nil
+	}
+}
+
+// AtLeast returns a Relation requiring the follow-up output to be greater
+// than or equal to the source output: more (or bigger) input must not shrink
+// the output.
+func AtLeast[I any, O cmp.Ordered]() Relation[I, O] {
+	return func(c Case[I, O]) error {
+		if c.FollowUpOut < c.SourceOut {
+			return fmt.Errorf("follow-up output %v < source output %v", c.FollowUpOut, c.SourceOut)
+		}
+		return nil
+	}
+}
+
+// AtMost returns a Relation requiring the follow-up output to be less than
+// or equal to the source output.
+func AtMost[I any, O cmp.Ordered]() Relation[I, O] {
+	return func(c Case[I, O]) error {
+		if c.FollowUpOut > c.SourceOut {
+			return fmt.Errorf("follow-up output %v > source output %v", c.FollowUpOut, c.SourceOut)
+		}
+		return nil
+	}
+}
+
+func sameMultiset[E comparable](a, b []E) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[E]int, len(a))
+	for _, e := range a {
+		counts[e]++
+	}
+	for _, e := range b {
+		counts[e]--
+		if counts[e] < 0 {
+			return false
+		}
+	}
+	return true
 }
