@@ -99,15 +99,16 @@ The whole library is layers, each callable without the ones above:
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  mtlaws — ready-made relation sets               │  (planned)
-│  for common contracts (codec, comparator, set)   │
+│  laws — ready-made relation sets                 │
+│  Codec · Sortable · Comparator                   │
 ├──────────────────────────────────────────────────┤
-│  runners      Run · Diff                         │
+│  runners      Run · RunN · Diff                  │
 ├──────────────────────────────────────────────────┤
 │  combinators  All · Any · Contra                 │
 │               Identity · Compose · PowerSet      │
 ├──────────────────────────────────────────────────┤
 │  primitives   Follow · Execute · Assert          │
+│               FollowN · ExecuteN · AssertN       │
 ├──────────────────────────────────────────────────┤
 │  rapid        generation · shrinking · seeds     │
 └──────────────────────────────────────────────────┘
@@ -184,9 +185,28 @@ rapid.Check(t, func(t *rapid.T) {
 
 The whole sequence — length, op choices, arguments — is drawn through rapid, so a divergence is minimized to the shortest op sequence that exposes it.
 
+## Ready-made law sets: `laws`
+
+The `laws` subpackage ships relation batteries for contracts Go code re-implements all the time — instantiate them against your implementation in one line:
+
+```go
+// your codec must round-trip and encode deterministically
+laws.Codec(t, docGen, myMarshal, myUnmarshal, func(a, b Doc) bool { return a == b })
+
+// your sort must produce a sorted permutation of the input, order-independent, idempotent
+laws.Sortable(t, rapid.SliceOf(rapid.Int()), mysort)
+
+// your comparator must be reflexive, antisymmetric, eq-consistent, transitive
+laws.Comparator(t, rapid.Int(), myCmp, func(a, b int) bool { return a == b })
+```
+
+Every law set is verified in molt's own test suite to catch deliberately broken implementations.
+
+N-ary relations (`RunN`, `MRN`) power the multi-input laws like commutativity and transitivity — relations over 2–3 independent inputs that a single-source MR cannot express.
+
 ## Status
 
-Early; API may still shift. Done: the core vocabulary (`Case`, `MR`, `Relation`), both runners (`Run`, `Diff`), primitives (`Follow`, `Execute`, `Assert`), relation and transform combinators. Planned: n-ary relations (commutativity, transitivity — multiple independent source inputs), an example-driven mode, and a catalog of ready-made relation sets for common contracts (codecs, comparators, sets, maps).
+Early; API may still shift. Done: the core vocabulary (`Case`, `MR`, `Relation`, and n-ary `CaseN`/`MRN`), runners (`Run`, `RunN`, `Diff`), primitives (`Follow`, `Execute`, `Assert` and n-ary variants), relation and transform combinators, and the first law sets (`laws.Codec`, `laws.Sortable`, `laws.Comparator`). Planned: an example-driven mode (run relations over fixed input tables), and more law sets.
 
 ## License
 
